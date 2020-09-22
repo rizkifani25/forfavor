@@ -1,21 +1,53 @@
-import cv2
 import numpy as np
+import cv2
+import pickle
 
-faceDetect = cv2.CascadeClassifier('haarcascade_frontalface_default.xml');
-camera = cv2.VideoCapture(0);
+face_cascade = cv2.CascadeClassifier('cascades/data/haarcascade_frontalface_alt2.xml')
+recognizer = cv2.face.LBPHFaceRecognizer_create()
+recognizer.read("recognizers/face-trainner.yml")
 
-while(True): 
-    ret,img =camera.read();
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    faces = faceDetect.detectMultiScale(gray, 1.3, 5);
-    
+labels = {"person_name": 1}
+with open("pickles/face-labels.pickle", 'rb') as f:
+	og_labels = pickle.load(f)
+	labels = {v:k for k,v in og_labels.items()}
+
+cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+
+while(True):
+    # Capture frame-by-frame
+    ret, frame = cap.read()
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    faces = face_cascade.detectMultiScale(gray, scaleFactor = 1.5, minNeighbors = 5)
     for (x, y, w, h) in faces:
-        cv2.rectangle(img, (x , y), (x + w, y + h),(0, 255, 0), 2)
-    
-    cv2.imshow("Face",img);
-    
-    if (cv2.waitKey(1) == ord('q')):
-        break;
+        roi_gray = gray[y:y+h, x:x+w]
 
-camera.release()
+        # recognize
+        id_, conf = recognizer.predict(roi_gray)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        stroke = 2
+        if conf >= 10 and conf <= 60:
+            name = labels[id_]
+            color = (100, 255, 255)
+            cv2.putText(frame, name, (x,y), font, 1, color, stroke, cv2.LINE_AA)
+        else:
+            name = "unknown"
+            color = (0, 0, 255)
+            cv2.putText(frame, name, (x,y), font, 1, color, stroke, cv2.LINE_AA)
+
+        img_item = "sample_images.png"
+        cv2.imwrite(img_item, roi_gray)
+        
+        color = (255, 0, 0)
+        stroke = 2
+        end_cord_x = x + w
+        end_cord_y = y + h
+        cv2.rectangle(frame, (x , y), (end_cord_x, end_cord_y), color, stroke)
+
+    # Display the resulting frame
+    cv2.imshow('frame', frame)
+    if cv2.waitKey(20) & 0xFF == ord('q'):
+        break
+
+# When everything done, release the capture
+cap.release()
 cv2.destroyAllWindows()
